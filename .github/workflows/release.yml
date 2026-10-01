@@ -3,6 +3,11 @@ name: Release
 permissions:
   contents: read
 
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
