@@ -131,14 +131,19 @@ impl Chip8 {
             return;
         }
 
+        let mut stdout = stdout();
+        execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All)).unwrap();
+
         print!("┌");
-        for _ in 0..64 {
+        for _ in 0..24 {
             print!("─");
         }
-        println!("┐");
-        let mut stdout = stdout();
-
-        execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All)).unwrap();
+        print!(" CHIP-8 Emulator ");
+        for _ in 0..23 {
+            print!("─");
+        }
+        print!("┐");
+        execute!(stdout, cursor::MoveToNextLine(1)).unwrap();
 
         for y in 0..32 {
             print!("│");
@@ -157,7 +162,8 @@ impl Chip8 {
         for _ in 0..64 {
             print!("─");
         }
-        println!("┘");
+        print!("┘");
+        execute!(stdout, cursor::MoveToNextLine(1)).unwrap();
         stdout.flush().unwrap();
     }
 
