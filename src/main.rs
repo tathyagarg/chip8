@@ -1,3 +1,4 @@
+use clap::Parser;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -13,8 +14,6 @@ use std::{
     thread::{self},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-
-const LOG_FILE: &str = "ch8.log";
 
 struct Logger {
     log_file: fs::File,
@@ -59,12 +58,12 @@ struct Chip8 {
 }
 
 impl Chip8 {
-    pub fn init_from(fp: &str) -> Chip8 {
+    pub fn init_from(fp: &str, log_file: Option<String>) -> Chip8 {
         let program = fs::read(fp).expect("Failed to read program file");
-        Chip8::init(&program)
+        Chip8::init(&program, log_file)
     }
 
-    pub fn init(program: &[u8]) -> Chip8 {
+    pub fn init(program: &[u8], log_file: Option<String>) -> Chip8 {
         if program.len() > (0xFFF - 0x200) {
             panic!("Program too long");
         }
@@ -99,10 +98,17 @@ impl Chip8 {
 
             waiting_for: None,
 
-            // logger: None,
-            logger: Some(Logger {
-                log_file: fs::File::options().append(true).open(LOG_FILE).unwrap(),
-            }),
+            logger: if let Some(log_file) = log_file {
+                Some(Logger {
+                    log_file: fs::File::options()
+                        .append(true)
+                        .create(true)
+                        .open(log_file)
+                        .unwrap(),
+                })
+            } else {
+                None
+            },
         }
     }
 
@@ -572,19 +578,52 @@ impl Chip8 {
     }
 }
 
+/// A simple CHIP-8 emulator written in Rust
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to the CHIP-8 program to run
+    #[arg(short, long)]
+    program: String,
+
+    #[arg(short, long, default_value_t = false)]
+    compile: bool,
+
+    /// Optional log file to write logs to
+    #[arg(short, long)]
+    log_file: Option<String>,
+}
+
 fn main() {
+    let args = Args::parse();
+
+    let chip = if args.compile {
+        let program_txt = fs::read(&args.program).expect("Failed to read program file");
+        let mut bytes = Vec::new();
+        let mut prev_ch = None;
+
+        for byte in program_txt {
+            let ch = byte as char;
+            if ch.is_whitespace() {
+                continue;
+            }
+
+            if let Some(prev) = prev_ch {
+                let hex_str = format!("{}{}", prev, ch);
+                let byte = u8::from_str_radix(&hex_str, 16).expect("Invalid hex digit");
+                bytes.push(byte);
+                prev_ch = None;
+            } else {
+                prev_ch = Some(ch);
+            }
+        }
+
+        Chip8::init(&bytes, args.log_file)
+    } else {
+        Chip8::init_from(&args.program, args.log_file)
+    };
+
     terminal::enable_raw_mode().unwrap();
-
-    let args = std::env::args().collect::<Vec<String>>();
-    if args.len() < 2 {
-        println!("Usage: {} <program>", args[0]);
-        return;
-    }
-
-    let program = &args[1];
-    let chip = Arc::new(Mutex::new(Chip8::init_from(program)));
-
-    Chip8::run(Arc::clone(&chip));
-
+    Chip8::run(Arc::new(Mutex::new(chip)));
     terminal::disable_raw_mode().unwrap();
 }
