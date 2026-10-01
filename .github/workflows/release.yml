@@ -37,7 +37,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       - name: Upload Release Assets
-        uses: taiki-e/upload-gh-release-assets-action@v1
+        uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: chip8
           target: ${{ matrix.target }}
