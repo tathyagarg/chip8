@@ -5,6 +5,7 @@ use crossterm::{
     terminal::{self, Clear, ClearType},
 };
 use rand;
+use rodio::{self, Source, source::SineWave};
 use std::{
     fs,
     io::{Write, stdout},
@@ -13,7 +14,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-const LOG_FILE: &str = "example.log";
+const LOG_FILE: &str = "ch8.log";
 
 struct Logger {
     log_file: fs::File,
@@ -98,10 +99,10 @@ impl Chip8 {
 
             waiting_for: None,
 
-            logger: None,
-            // logger: Some(Logger {
-            //     log_file: fs::File::options().append(true).open(LOG_FILE).unwrap(),
-            // }),
+            // logger: None,
+            logger: Some(Logger {
+                log_file: fs::File::options().append(true).open(LOG_FILE).unwrap(),
+            }),
         }
     }
 
@@ -130,11 +131,17 @@ impl Chip8 {
             return;
         }
 
+        print!("┌");
+        for _ in 0..64 {
+            print!("─");
+        }
+        println!("┐");
         let mut stdout = stdout();
 
         execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All)).unwrap();
 
         for y in 0..32 {
+            print!("│");
             for x in 0..64 {
                 let pixel = self.frame_buffer[y][x];
                 if pixel {
@@ -143,8 +150,14 @@ impl Chip8 {
                     print!(" ");
                 }
             }
+            print!("│");
             execute!(stdout, cursor::MoveToNextLine(1)).unwrap();
         }
+        print!("└");
+        for _ in 0..64 {
+            print!("─");
+        }
+        println!("┘");
         stdout.flush().unwrap();
     }
 
@@ -155,12 +168,19 @@ impl Chip8 {
         thread::spawn(move || {
             let tick = Duration::from_micros(16_667);
 
+            let handle = rodio::DeviceSinkBuilder::open_default_sink().unwrap();
+            let player = rodio::Player::connect_new(&handle.mixer());
+            let source = SineWave::new(999.0)
+                .take_duration(Duration::from_micros(16_667))
+                .amplify(0.20);
+
             loop {
                 {
                     let mut chip8 = chip8_timer.lock().unwrap();
 
                     if chip8.sound_timer > 0 {
                         chip8.sound_timer -= 1;
+                        player.append(source.clone());
                         if let Some(logger) = &mut chip8.logger {
                             logger.log("[SOUND] Beep!");
                         }
